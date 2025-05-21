@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Check, Loader2, Search, X, Mail, User } from "lucide-react"
+import { Check, Loader2, Search, X } from "lucide-react"
 
 interface NewConversationDialogProps {
   open: boolean
@@ -38,7 +38,7 @@ export function NewConversationDialog({
   const { toast } = useToast()
   const supabase = getSupabaseClient()
 
-  // Rechercher des utilisateurs par nom d'utilisateur ou email
+  // Rechercher des utilisateurs
   const handleSearch = async () => {
     if (!searchTerm.trim()) return
 
@@ -46,28 +46,7 @@ export function NewConversationDialog({
     setSearchResults([])
 
     try {
-      // Vérifier si le terme de recherche ressemble à un email
-      const isEmail = searchTerm.includes("@") && searchTerm.includes(".")
-
-      if (isEmail) {
-        // Recherche exacte par email
-        const { data: userByEmail, error: emailError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("username", searchTerm.trim())
-          .neq("id", currentUserId)
-          .limit(1)
-
-        if (emailError) throw emailError
-
-        if (userByEmail && userByEmail.length > 0) {
-          setSearchResults(userByEmail)
-          setSearching(false)
-          return
-        }
-      }
-
-      // Recherche standard par nom d'utilisateur ou email partiel
+      // Recherche simple par nom d'utilisateur
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
@@ -171,17 +150,12 @@ export function NewConversationDialog({
     }
   }
 
-  // Déterminer si le terme de recherche est un email
-  const isEmailSearch = searchTerm.includes("@") && searchTerm.includes(".")
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md futuristic-panel">
         <DialogHeader>
           <DialogTitle>Nouvelle conversation</DialogTitle>
-          <DialogDescription>
-            Recherchez des utilisateurs par nom d'utilisateur ou adresse email pour démarrer une conversation.
-          </DialogDescription>
+          <DialogDescription>Recherchez des utilisateurs pour démarrer une conversation.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
@@ -191,23 +165,14 @@ export function NewConversationDialog({
               <Label htmlFor="search" className="sr-only">
                 Rechercher des utilisateurs
               </Label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  {isEmailSearch ? (
-                    <Mail className="h-4 w-4 text-gray-400" />
-                  ) : (
-                    <User className="h-4 w-4 text-gray-400" />
-                  )}
-                </div>
-                <Input
-                  id="search"
-                  placeholder="Rechercher par nom d'utilisateur ou email..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  className="bg-gray-800/50 pl-10"
-                />
-              </div>
+              <Input
+                id="search"
+                placeholder="Rechercher par nom d'utilisateur..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className="bg-gray-800/50"
+              />
             </div>
             <Button type="button" onClick={handleSearch} disabled={searching}>
               {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
@@ -246,7 +211,6 @@ export function NewConversationDialog({
               <div className="space-y-1">
                 {searchResults.map((user) => {
                   const isSelected = selectedUsers.some((u) => u.id === user.id)
-                  const isEmail = user.username && user.username.includes("@")
 
                   return (
                     <button
@@ -261,10 +225,7 @@ export function NewConversationDialog({
                           {user.username?.charAt(0).toUpperCase() || user.id.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 text-left">
-                        <p className="text-sm font-medium">{isEmail ? "Utilisateur" : user.username || user.id}</p>
-                        {isEmail && <p className="text-xs text-gray-400">{user.username}</p>}
-                      </div>
+                      <span className="flex-1 text-left">{user.username || user.id}</span>
                       {isSelected ? <Check className="h-4 w-4 text-primary" /> : null}
                     </button>
                   )
@@ -274,14 +235,7 @@ export function NewConversationDialog({
           )}
 
           {searchTerm && searchResults.length === 0 && !searching && (
-            <div className="text-center py-4">
-              <p className="text-sm text-gray-400">Aucun utilisateur trouvé.</p>
-              {isEmailSearch && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Assurez-vous que l'adresse email est correcte et que l'utilisateur est inscrit.
-                </p>
-              )}
-            </div>
+            <p className="text-sm text-gray-400 text-center">Aucun utilisateur trouvé.</p>
           )}
         </div>
 

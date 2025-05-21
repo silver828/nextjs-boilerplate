@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { useToast } from "@/components/ui/use-toast"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Loader2 } from "lucide-react"
 
 export function ProfileFallback() {
@@ -12,64 +12,7 @@ export function ProfileFallback() {
   const { toast } = useToast()
   const supabase = getSupabaseClient()
   const [isCreating, setIsCreating] = useState(false)
-  const [isAutoCreating, setIsAutoCreating] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // Tentative automatique de création de profil au chargement
-  useEffect(() => {
-    const autoCreateProfile = async () => {
-      try {
-        // Récupérer la session
-        const { data: sessionData } = await supabase.auth.getSession()
-
-        if (!sessionData.session) {
-          setError("Vous n'êtes pas connecté.")
-          setIsAutoCreating(false)
-          return
-        }
-
-        // Vérifier si le profil existe déjà
-        const { data: existingProfile } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("id", sessionData.session.user.id)
-          .maybeSingle()
-
-        if (existingProfile) {
-          // Le profil existe, rediriger vers la page des messages
-          window.location.reload()
-          return
-        }
-
-        // Créer un profil
-        const { error } = await supabase.from("profiles").insert({
-          id: sessionData.session.user.id,
-          username: sessionData.session.user.email,
-          avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${sessionData.session.user.email}`,
-          status: "online",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-
-        if (error) {
-          throw error
-        }
-
-        // Attendre un peu avant de recharger la page
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
-      } catch (error: any) {
-        console.error("Erreur lors de la création automatique du profil:", error)
-        setError(error.message || "Une erreur est survenue lors de la création du profil.")
-        setIsAutoCreating(false)
-      }
-    }
-
-    if (isAutoCreating) {
-      autoCreateProfile()
-    }
-  }, [supabase, isAutoCreating])
 
   const handleSignOut = async () => {
     try {
@@ -98,14 +41,25 @@ export function ProfileFallback() {
         return
       }
 
+      // Vérifier si le profil existe déjà
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", sessionData.session.user.id)
+        .single()
+
+      if (existingProfile) {
+        // Le profil existe déjà, recharger la page
+        window.location.reload()
+        return
+      }
+
       // Créer un profil manuellement
       const { error } = await supabase.from("profiles").insert({
         id: sessionData.session.user.id,
         username: sessionData.session.user.email,
         avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${sessionData.session.user.email}`,
         status: "online",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
 
       if (error) {
@@ -132,20 +86,6 @@ export function ProfileFallback() {
     } finally {
       setIsCreating(false)
     }
-  }
-
-  if (isAutoCreating) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-black p-4">
-        <div className="w-full max-w-md space-y-6 text-center">
-          <h1 className="text-2xl font-bold text-white">Création de votre profil</h1>
-          <div className="flex justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-          </div>
-          <p className="text-gray-400">Veuillez patienter pendant que nous créons votre profil...</p>
-        </div>
-      </div>
-    )
   }
 
   return (
