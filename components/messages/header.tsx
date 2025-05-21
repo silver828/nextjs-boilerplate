@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/components/ui/use-toast"
-import { Plus, Menu } from "lucide-react"
+import { Plus, Menu, RefreshCw } from "lucide-react"
 
 interface HeaderProps {
   onNewConversation: () => void
@@ -21,6 +21,7 @@ interface HeaderProps {
 
 export default function Header({ onNewConversation }: HeaderProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClient()
@@ -40,6 +41,33 @@ export default function Header({ onNewConversation }: HeaderProps) {
       })
     } finally {
       setIsLoggingOut(false)
+    }
+  }
+
+  const handleSyncUsers = async () => {
+    setIsSyncing(true)
+    try {
+      const response = await fetch("/api/sync-users")
+      const data = await response.json()
+
+      if (data.error) {
+        throw new Error(data.error)
+      }
+
+      toast({
+        title: "Synchronisation réussie",
+        description: `${data.newProfilesCreated} nouveaux profils créés sur ${data.usersWithoutProfiles} utilisateurs sans profil.`,
+      })
+
+      router.refresh()
+    } catch (error: any) {
+      toast({
+        title: "Erreur de synchronisation",
+        description: error.message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSyncing(false)
     }
   }
 
@@ -73,6 +101,19 @@ export default function Header({ onNewConversation }: HeaderProps) {
                 <Link href="/profile" className="cursor-pointer">
                   Profil
                 </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSyncUsers} disabled={isSyncing} className="cursor-pointer">
+                {isSyncing ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Synchronisation...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Synchroniser utilisateurs
+                  </>
+                )}
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-neon-blue/20" />
               <DropdownMenuItem

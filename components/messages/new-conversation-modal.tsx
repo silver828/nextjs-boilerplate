@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Check, X, Loader2 } from "lucide-react"
+import { Check, X, Loader2, RefreshCw } from "lucide-react"
 
 interface NewConversationModalProps {
   isOpen: boolean
@@ -28,75 +28,111 @@ export default function NewConversationModal({
   const [selectedUsers, setSelectedUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [fetchingUsers, setFetchingUsers] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
   const { toast } = useToast()
   const supabase = createClient()
 
+  // Fonction pour récupérer les utilisateurs
+  const fetchUsers = async () => {
+    if (!isOpen) return
+
+    setFetchingUsers(true)
+    setError(null)
+    setDebugInfo(null)
+
+    try {
+      console.log("Récupération des utilisateurs, utilisateur actuel:", currentUserId)
+
+      // Vérifier d'abord si l'utilisateur actuel existe
+      const { data: currentUser, error: currentUserError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", currentUserId)
+        .single()
+
+      if (currentUserError) {
+        console.error("Erreur lors de la récupération de l'utilisateur actuel:", currentUserError)
+        setError("Erreur lors de la récupération de l'utilisateur actuel: " + currentUserError.message)
+
+        // Si l'utilisateur actuel n'existe pas, essayons de le créer
+        if (currentUserError.code === "PGRST116") {
+          const { data: authUser } = await supabase.auth.getUser()
+          if (authUser && authUser.user) {
+            const { error: insertError } = await supabase.from("profiles").insert({
+              id: currentUserId,
+              email: authUser.user.email,
+              username: authUser.user.email?.split("@")[0] || "user",
+            })
+
+            if (insertError) {
+              console.error("Erreur lors de la création du profil:", insertError)
+            } else {
+              console.log("Profil créé avec succès pour l'utilisateur actuel")
+            }
+          }
+        }
+      } else {
+        console.log("Utilisateur actuel trouvé:", currentUser)
+      }
+
+      // Récupérer tous les utilisateurs
+      const { data: allUsers, error: allUsersError } = await supabase.from("profiles").select("*")
+
+      if (allUsersError) {
+        console.error("Erreur lors de la récupération de tous les utilisateurs:", allUsersError)
+        setError("Erreur lors de la récupération de tous les utilisateurs: " + allUsersError.message)
+        setDebugInfo({
+          error: allUsersError,
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+          hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        })
+      } else {
+        console.log("Tous les utilisateurs trouvés:", allUsers)
+        setDebugInfo({
+          totalUsers: allUsers?.length || 0,
+          users: allUsers?.map((u) => ({ id: u.id, email: u.email, username: u.username })),
+        })
+      }
+
+      // Récupérer tous les utilisateurs sauf l'utilisateur actuel
+      const { data, error: usersError } = await supabase.from("profiles").select("*").neq("id", currentUserId)
+
+      if (usersError) {
+        console.error("Erreur lors de la récupération des utilisateurs:", usersError)
+        setError("Erreur lors de la récupération des utilisateurs: " + usersError.message)
+      } else {
+        console.log("Utilisateurs trouvés (sauf actuel):", data?.length || 0)
+        setUsers(data || [])
+      }
+    } catch (error: any) {
+      console.error("Exception lors de la récupération des utilisateurs:", error)
+      setError("Exception lors de la récupération des utilisateurs: " + error.message)
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les utilisateurs: " + error.message,
+        variant: "destructive",
+      })
+    } finally {
+      setFetchingUsers(false)
+    }
+  }
+
   // Charger les utilisateurs quand le modal s'ouvre
   useEffect(() => {
-    const fetchUsers = async () => {
-      if (!isOpen) return
-
-      setFetchingUsers(true)
-      try {
-        // Récupérer tous les utilisateurs sauf l'utilisateur actuel
-        const { data, error } = await supabase.from("profiles").select("*").neq("id", currentUserId)
-
-        if (error) {
-          throw error
-        }
-
-        console.log("Utilisateurs trouvés:", data?.length || 0)
-        setUsers(data || [])
-      } catch (error: any) {
-        console.error("Erreur lors de la récupération des utilisateurs:", error.message)
-        toast({
-          title: "Erreur",
-          description: "Impossible de charger les utilisateurs",
-          variant: "destructive",
-        })
-      } finally {
-        setFetchingUsers(false)
-      }
+    if (isOpen) {
+      fetchUsers()
     }
-
-    fetchUsers()
-  }, [isOpen, currentUserId, supabase, toast])
-
-  // Rechercher des utilisateurs quand le terme de recherche change
-  useEffect(() => {
-    const searchUsers = async () => {
-      if (!searchTerm || searchTerm.length < 2) return
-
-      setFetchingUsers(true)
-      try {
-        // Rechercher par nom d'utilisateur ou email
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("*")
-          .neq("id", currentUserId)
-          .or(`username.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
-          .order("username", { ascending: true })
-
-        if (error) {
-          throw error
-        }
-
-        console.log("Résultats de recherche:", data?.length || 0)
-        setUsers(data || [])
-      } catch (error: any) {
-        console.error("Erreur lors de la recherche:", error.message)
-      } finally {
-        setFetchingUsers(false)
-      }
-    }
-
-    if (searchTerm.length >= 2) {
-      searchUsers()
-    }
-  }, [searchTerm, currentUserId, supabase])
+  }, [isOpen])
 
   // Filtrer les utilisateurs en fonction du terme de recherche
-  const filteredUsers = users.filter((user) => !selectedUsers.some((selectedUser) => selectedUser.id === user.id))
+  const filteredUsers = searchTerm
+    ? users.filter(
+        (user) =>
+          (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())),
+      )
+    : users
 
   const handleSelectUser = (user: any) => {
     if (selectedUsers.some((u) => u.id === user.id)) {
@@ -170,10 +206,10 @@ export default function NewConversationModal({
       onConversationCreated(fullConversation)
       onClose()
     } catch (error: any) {
-      console.error("Erreur lors de la création de la conversation:", error.message)
+      console.error("Erreur lors de la création de la conversation:", error)
       toast({
         title: "Erreur",
-        description: "Impossible de créer la conversation",
+        description: "Impossible de créer la conversation: " + error.message,
         variant: "destructive",
       })
     } finally {
@@ -189,6 +225,16 @@ export default function NewConversationModal({
         </DialogHeader>
 
         <div className="space-y-4 my-4">
+          {error && (
+            <div className="p-3 bg-red-900/30 border border-red-500/50 rounded-md text-sm text-red-300">
+              <p className="font-semibold mb-1">Erreur:</p>
+              <p>{error}</p>
+              <Button variant="outline" size="sm" className="mt-2 text-xs" onClick={fetchUsers}>
+                <RefreshCw className="h-3 w-3 mr-1" /> Réessayer
+              </Button>
+            </div>
+          )}
+
           {selectedUsers.length > 0 && (
             <div className="flex flex-wrap gap-2 p-2 border border-neon-blue/30 rounded-md bg-cyber-darker">
               {selectedUsers.map((user) => (
@@ -219,9 +265,9 @@ export default function NewConversationModal({
                   </div>
                 ) : filteredUsers.length === 0 ? (
                   <CommandEmpty className="py-6 text-center text-sm">
-                    {searchTerm.length > 0
-                      ? "Aucun utilisateur trouvé"
-                      : "Commencez à taper pour rechercher des utilisateurs"}
+                    {users.length === 0
+                      ? "Aucun utilisateur disponible. Créez un autre compte pour démarrer une conversation."
+                      : "Aucun utilisateur trouvé pour cette recherche"}
                   </CommandEmpty>
                 ) : (
                   <CommandGroup>
@@ -256,6 +302,19 @@ export default function NewConversationModal({
                 )}
               </CommandList>
             </Command>
+          </div>
+
+          <div className="text-xs text-gray-400">
+            <p>Utilisateurs disponibles: {users.length}</p>
+            <p>Utilisateur actuel ID: {currentUserId.substring(0, 8)}...</p>
+            {debugInfo && (
+              <details className="mt-2">
+                <summary className="cursor-pointer">Informations de débogage</summary>
+                <pre className="mt-1 p-2 bg-cyber-darker rounded-md overflow-auto text-[10px] max-h-[100px]">
+                  {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+              </details>
+            )}
           </div>
         </div>
 
