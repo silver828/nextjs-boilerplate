@@ -25,9 +25,9 @@ export default function GlobalError({
             <p className="text-gray-400">
               L'application a rencontré un problème inattendu. Veuillez réessayer ou revenir à l'accueil.
             </p>
-            {error.digest && (
-              <p className="text-xs text-gray-500">
-                Code d'erreur: <code>{error.digest}</code>
+            {error.message && (
+              <p className="text-xs text-gray-500 bg-gray-800/50 p-2 rounded-md overflow-auto">
+                Détails: {error.message}
               </p>
             )}
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">

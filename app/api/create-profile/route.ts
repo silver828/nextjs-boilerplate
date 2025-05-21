@@ -16,27 +16,45 @@ export async function POST(request: Request) {
     }
 
     // Vérifier si le profil existe déjà
-    const { data: existingProfile } = await supabase.from("profiles").select("id").eq("id", session.user.id).single()
+    const { data: existingProfile, error: checkError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle()
+
+    if (checkError) {
+      console.error("Erreur lors de la vérification du profil:", checkError)
+    }
 
     if (existingProfile) {
       return NextResponse.json({ success: true, profile: existingProfile })
     }
 
-    // Créer un nouveau profil avec l'email comme nom d'utilisateur par défaut
-    const { data: newProfile, error } = await supabase
+    // Créer un nouveau profil
+    const { data: newProfile, error: insertError } = await supabase
       .from("profiles")
       .insert({
         id: session.user.id,
-        username: session.user.email, // Utiliser l'email comme nom d'utilisateur par défaut
+        username: session.user.email,
         avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user.email}`,
         status: "online",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .select()
       .single()
 
-    if (error) {
-      console.error("Erreur lors de la création du profil:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (insertError) {
+      console.error("Erreur lors de la création du profil:", insertError)
+
+      // Vérifier si le profil existe maintenant (en cas de race condition)
+      const { data: checkAgain } = await supabase.from("profiles").select("*").eq("id", session.user.id).single()
+
+      if (checkAgain) {
+        return NextResponse.json({ success: true, profile: checkAgain })
+      }
+
+      return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, profile: newProfile })

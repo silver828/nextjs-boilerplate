@@ -11,7 +11,7 @@ import type { Profile } from "@/lib/database.types"
 import { Button } from "@/components/ui/button"
 import { PlusCircle } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { ProfileFallback } from "@/components/profile-fallback"
+import { LoadingSpinner } from "@/components/loading-spinner"
 
 interface MessageLayoutProps {
   profile: Profile
@@ -24,50 +24,43 @@ export function MessageLayout({ profile, initialConversations, userId }: Message
   const [conversations, setConversations] = useState<any[]>(initialConversations || [])
   const [selectedConversation, setSelectedConversation] = useState<any | null>(null)
   const [isNewConversationOpen, setIsNewConversationOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
   const supabase = getSupabaseClient()
-  const [isLoading, setIsLoading] = useState(true)
+  const [hasProfile, setHasProfile] = useState(!!(profile && userId))
 
   useEffect(() => {
-    if (!profile || !userId) {
-      setIsLoading(false)
-      return
-    }
-
-    setIsLoading(false)
+    setHasProfile(!!(profile && userId))
   }, [profile, userId])
 
-  // Vérifier si les données nécessaires sont disponibles
-  if (isLoading) {
-    return <ProfileFallback />
-  }
-
   useEffect(() => {
-    try {
-      // Écouter les changements dans les conversations
-      const conversationsChannel = supabase
-        .channel("conversations-changes")
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "conversations",
-          },
-          (payload) => {
-            router.refresh()
-          },
-        )
-        .subscribe()
+    if (hasProfile) {
+      try {
+        // Écouter les changements dans les conversations
+        const conversationsChannel = supabase
+          .channel("conversations-changes")
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "conversations",
+            },
+            (payload) => {
+              router.refresh()
+            },
+          )
+          .subscribe()
 
-      return () => {
-        supabase.removeChannel(conversationsChannel)
+        return () => {
+          supabase.removeChannel(conversationsChannel)
+        }
+      } catch (error) {
+        console.error("Erreur lors de la configuration du canal de conversations:", error)
       }
-    } catch (error) {
-      console.error("Erreur lors de la configuration du canal de conversations:", error)
     }
-  }, [supabase, router])
+  }, [supabase, router, hasProfile])
 
   const handleSignOut = async () => {
     try {
@@ -95,6 +88,25 @@ export function MessageLayout({ profile, initialConversations, userId }: Message
 
   const handleProfileUpdated = (updatedProfile: Profile) => {
     setUserProfile(updatedProfile)
+  }
+
+  if (!hasProfile) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-gray-900 to-black">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">Erreur: Données de profil manquantes</p>
+          <Button onClick={() => window.location.reload()}>Actualiser</Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-gray-900 to-black">
+        <LoadingSpinner className="h-10 w-10" />
+      </div>
+    )
   }
 
   return (
