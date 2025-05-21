@@ -2,7 +2,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { MessageLayout } from "@/components/message-layout"
 import { LoadingSpinner } from "@/components/loading-spinner"
-import { ProfileFallback } from "@/components/profile-fallback"
+import { AuthError } from "@/components/auth-error"
 
 export default async function MessagesPage() {
   try {
@@ -18,82 +18,82 @@ export default async function MessagesPage() {
     }
 
     // Récupérer le profil de l'utilisateur
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle()
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle()
 
-    // Si le profil n'existe pas, afficher le composant de fallback
-    if (!profile) {
-      return <ProfileFallback />
-    }
+    // Si le profil n'existe pas, le créer
+    if (!profile && !profileError) {
+      const { data: newProfile, error: insertError } = await supabase
+        .from("profiles")
+        .insert({
+          id: session.user.id,
+          username: session.user.email,
+          avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user.email}`,
+          status: "online",
+        })
+        .select()
+        .single()
 
-    // Récupérer les conversations
-    let conversations = []
-
-    try {
-      // Récupérer les IDs des conversations auxquelles l'utilisateur participe
-      const { data: participations } = await supabase
-        .from("conversation_participants")
-        .select("conversation_id")
-        .eq("profile_id", session.user.id)
-
-      if (participations && participations.length > 0) {
-        const conversationIds = participations.map((p) => p.conversation_id)
-
-        // Récupérer les conversations
-        const { data: conversationsData } = await supabase
-          .from("conversations")
-          .select("*")
-          .in("id", conversationIds)
-          .order("updated_at", { ascending: false })
-
-        if (conversationsData) {
-          // Pour chaque conversation, récupérer les participants
-          const enhancedConversations = []
-
-          for (const conv of conversationsData) {
-            try {
-              // Récupérer les IDs des participants
-              const { data: participantsData } = await supabase
-                .from("conversation_participants")
-                .select("profile_id")
-                .eq("conversation_id", conv.id)
-
-              if (participantsData) {
-                const participantIds = participantsData.map((p) => p.profile_id)
-
-                // Récupérer les profils des participants
-                const { data: profilesData } = await supabase
-                  .from("profiles")
-                  .select("id, username, avatar_url")
-                  .in("id", participantIds)
-
-                // Ajouter les profils à la conversation
-                const enhancedConv = {
-                  ...conv,
-                  profiles: profilesData || [],
-                }
-
-                enhancedConversations.push(enhancedConv)
-              } else {
-                enhancedConversations.push({ ...conv, profiles: [] })
-              }
-            } catch (error) {
-              console.error(`Erreur lors de la récupération des participants pour la conversation ${conv.id}:`, error)
-              enhancedConversations.push({ ...conv, profiles: [] })
-            }
-          }
-
-          conversations = enhancedConversations
-        }
+      if (insertError) {
+        return (
+          <AuthError
+            title="Erreur de profil"
+            message="Impossible de créer votre profil. Veuillez vous déconnecter et réessayer."
+          />
+        )
       }
-    } catch (error) {
-      console.error("Erreur lors de la récupération des conversations:", error)
-      // Continuer avec un tableau vide en cas d'erreur
+
+      // Si le profil a été créé avec succès, l'utiliser
+      if (newProfile) {
+        return <MessageLayout profile={newProfile} initialConversations={[]} userId={session.user.id} />
+      }
     }
 
-    return <MessageLayout profile={profile} initialConversations={conversations} userId={session.user.id} />
+    if (profileError) {
+      return (
+        <AuthError
+          title="Erreur de profil"
+          message="Impossible de récupérer votre profil. Veuillez vous déconnecter et réessayer."
+        />
+      )
+    }
+
+    // Si le profil existe, l'utiliser
+    if (profile) {
+      // Récupérer les conversations
+      const { data: conversations = [] } = await supabase
+        .from("conversations")
+        .select(
+          `
+          *,
+          conversation_participants!inner(profile_id),
+          profiles:conversation_participants!inner(profiles(*))
+        `,
+        )
+        .eq("conversation_participants.profile_id", session.user.id)
+        .order("updated_at", { ascending: false })
+
+      return <MessageLayout profile={profile} initialConversations={conversations || []} userId={session.user.id} />
+    }
+
+    // Si nous arrivons ici, c'est qu'il y a eu un problème avec le profil
+    return (
+      <AuthError
+        title="Erreur de profil"
+        message="Impossible de récupérer ou de créer votre profil. Veuillez vous déconnecter et réessayer."
+      />
+    )
   } catch (error) {
     console.error("Erreur dans la page des messages:", error)
-    return <ProfileFallback />
+    return (
+      <AuthError
+        title="Erreur inattendue"
+        message="Une erreur inattendue s'est produite. Veuillez réessayer ultérieurement."
+      />
+    )
   }
 }
 

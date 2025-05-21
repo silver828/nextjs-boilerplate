@@ -16,15 +16,11 @@ export async function POST(request: Request) {
     }
 
     // Vérifier si le profil existe déjà
-    const { data: existingProfile, error: checkError } = await supabase
+    const { data: existingProfile } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", session.user.id)
       .maybeSingle()
-
-    if (checkError) {
-      console.error("Erreur lors de la vérification du profil:", checkError)
-    }
 
     if (existingProfile) {
       return NextResponse.json({ success: true, profile: existingProfile })
@@ -38,22 +34,11 @@ export async function POST(request: Request) {
         username: session.user.email,
         avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user.email}`,
         status: "online",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
       .select()
       .single()
 
     if (insertError) {
-      console.error("Erreur lors de la création du profil:", insertError)
-
-      // Vérifier si le profil existe maintenant (en cas de race condition)
-      const { data: checkAgain } = await supabase.from("profiles").select("*").eq("id", session.user.id).single()
-
-      if (checkAgain) {
-        return NextResponse.json({ success: true, profile: checkAgain })
-      }
-
       return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
 

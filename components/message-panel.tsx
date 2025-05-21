@@ -59,7 +59,14 @@ export function MessagePanel({ conversation, currentUserId }: MessagePanelProps)
           .eq("conversation_id", conversation.id)
 
         if (participantsError) throw participantsError
-        setParticipants(participantsData?.map((p) => p.profiles) || [])
+
+        // Adapter en fonction de la structure des données
+        let profiles = []
+        if (participantsData) {
+          profiles = participantsData.map((p) => p.profiles).filter(Boolean)
+        }
+
+        setParticipants(profiles)
       } catch (error: any) {
         console.error("Erreur lors du chargement des messages:", error)
         setError(`Impossible de charger les messages: ${error.message}`)

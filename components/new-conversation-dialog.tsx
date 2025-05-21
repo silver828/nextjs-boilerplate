@@ -46,7 +46,6 @@ export function NewConversationDialog({
     setSearchResults([])
 
     try {
-      // Recherche simple par nom d'utilisateur
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
@@ -119,8 +118,7 @@ export function NewConversationDialog({
         .from("conversations")
         .select(`
           *,
-          conversation_participants!inner(profile_id),
-          profiles!conversation_participants(id, username, avatar_url)
+          profiles:conversation_participants(profiles(*))
         `)
         .eq("id", conversationData.id)
         .single()

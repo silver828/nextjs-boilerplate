@@ -26,7 +26,7 @@ export default function AuthForm() {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -40,7 +40,7 @@ export default function AuthForm() {
         description: "Bienvenue sur Merfenger !",
       })
 
-      // Forcer un rafraîchissement complet pour s'assurer que la session est bien prise en compte
+      // Redirection
       window.location.href = "/messages"
     } catch (error: any) {
       toast({
@@ -58,7 +58,7 @@ export default function AuthForm() {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -68,16 +68,6 @@ export default function AuthForm() {
 
       if (error) {
         throw error
-      }
-
-      // Vérifier si l'email a besoin d'être confirmé
-      if (data.user && data.user.identities && data.user.identities.length === 0) {
-        toast({
-          title: "Compte déjà existant",
-          description: "Un compte avec cet email existe déjà. Veuillez vous connecter.",
-          variant: "destructive",
-        })
-        return
       }
 
       setEmailSent(true)

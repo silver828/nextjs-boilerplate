@@ -21,7 +21,16 @@ export function ConversationList({
   // Fonction pour obtenir les autres participants d'une conversation
   const getOtherParticipants = (conversation: any) => {
     if (!conversation || !conversation.profiles) return []
-    return conversation.profiles.filter((profile: any) => profile && profile.id !== currentUserId)
+
+    // Adapter en fonction de la structure des données
+    let profiles = []
+    if (Array.isArray(conversation.profiles)) {
+      profiles = conversation.profiles
+    } else if (conversation.profiles.profiles && Array.isArray(conversation.profiles.profiles)) {
+      profiles = conversation.profiles.profiles
+    }
+
+    return profiles.filter((profile: any) => profile && profile.id !== currentUserId)
   }
 
   // Fonction pour obtenir le nom de la conversation
