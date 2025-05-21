@@ -23,6 +23,38 @@ export default function AuthForm() {
   const { toast } = useToast()
   const supabase = getSupabaseClient()
 
+  // Fonction pour créer un profil
+  const createProfile = async (userId: string, userEmail: string) => {
+    try {
+      // Vérifier si le profil existe déjà
+      const { data: existingProfile } = await supabase.from("profiles").select("id").eq("id", userId).single()
+
+      if (existingProfile) {
+        return { success: true }
+      }
+
+      // Créer un nouveau profil
+      const { error } = await supabase.from("profiles").insert({
+        id: userId,
+        username: userEmail,
+        avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userEmail}`,
+        status: "online",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+
+      if (error) {
+        console.error("Erreur lors de la création du profil:", error)
+        return { success: false, error }
+      }
+
+      return { success: true }
+    } catch (error) {
+      console.error("Erreur lors de la création du profil:", error)
+      return { success: false, error }
+    }
+  }
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -35,6 +67,15 @@ export default function AuthForm() {
 
       if (error) {
         throw error
+      }
+
+      // Créer un profil si nécessaire
+      if (data.user) {
+        const profileResult = await createProfile(data.user.id, data.user.email || email)
+
+        if (!profileResult.success) {
+          console.warn("Impossible de créer le profil automatiquement, mais la connexion a réussi.")
+        }
       }
 
       toast({
@@ -80,6 +121,15 @@ export default function AuthForm() {
           variant: "destructive",
         })
         return
+      }
+
+      // Créer un profil si l'utilisateur est créé et qu'il n'y a pas de confirmation d'email requise
+      if (data.user && !data.session) {
+        // L'utilisateur doit confirmer son email, nous créerons le profil après la confirmation
+        console.log("L'utilisateur doit confirmer son email avant la création du profil")
+      } else if (data.user && data.session) {
+        // Pas de confirmation d'email requise, créer le profil maintenant
+        await createProfile(data.user.id, data.user.email || email)
       }
 
       setEmailSent(true)

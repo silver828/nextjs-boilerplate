@@ -11,7 +11,31 @@ export async function GET(request: Request) {
     const supabase = createServerActionClient({ cookies: () => cookieStore })
 
     try {
-      await supabase.auth.exchangeCodeForSession(code)
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+
+      if (error) throw error
+
+      // Si l'échange a réussi et que nous avons un utilisateur, créer un profil
+      if (data.user) {
+        // Vérifier si le profil existe déjà
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", data.user.id)
+          .maybeSingle()
+
+        if (!existingProfile) {
+          // Créer un nouveau profil
+          await supabase.from("profiles").insert({
+            id: data.user.id,
+            username: data.user.email,
+            avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.email}`,
+            status: "online",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+        }
+      }
     } catch (error) {
       console.error("Erreur lors de l'échange du code:", error)
       // Rediriger vers la page d'accueil en cas d'erreur
