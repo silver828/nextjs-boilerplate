@@ -6,13 +6,7 @@ let supabaseClient: ReturnType<typeof createClientComponentClient<Database>> | n
 
 export const getSupabaseClient = () => {
   if (!supabaseClient) {
-    try {
-      supabaseClient = createClientComponentClient<Database>()
-    } catch (error) {
-      console.error("Erreur lors de la création du client Supabase:", error)
-      // Recréer le client en cas d'erreur
-      supabaseClient = createClientComponentClient<Database>()
-    }
+    supabaseClient = createClientComponentClient<Database>()
   }
   return supabaseClient
 }
