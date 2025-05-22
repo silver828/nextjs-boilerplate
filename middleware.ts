@@ -10,9 +10,15 @@ export async function middleware(req: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession()
 
-  // Si l'utilisateur n'est pas connecté et essaie d'accéder à une route protégée
-  if (!session && (req.nextUrl.pathname.startsWith("/messages") || req.nextUrl.pathname.startsWith("/profile"))) {
-    const redirectUrl = new URL("/login", req.url)
+  // If no session and trying to access protected routes
+  if (!session && (req.nextUrl.pathname.startsWith("/conversations") || req.nextUrl.pathname.startsWith("/profile"))) {
+    const redirectUrl = new URL("/auth?mode=sign-in", req.url)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // If session and trying to access auth routes
+  if (session && req.nextUrl.pathname.startsWith("/auth")) {
+    const redirectUrl = new URL("/conversations", req.url)
     return NextResponse.redirect(redirectUrl)
   }
 
@@ -20,5 +26,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/messages/:path*", "/profile/:path*", "/login", "/signup"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.svg).*)"],
 }
