@@ -72,7 +72,7 @@ export default function MessagesLayout({ userId, initialConversations }: Message
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center p-6">
-                <h3 className="text-xl font-semibold neon-text mb-2">Bienvenue sur Merfenger</h3>
+                <h3 className="text-xl font-semibold neon-text mb-2">Bienvenue sur Marsenger</h3>
                 <p className="text-gray-400 mb-4">Sélectionnez une conversation ou commencez-en une nouvelle</p>
                 <button onClick={() => setIsNewConversationModalOpen(true)} className="cyber-button">
                   Nouvelle conversation
